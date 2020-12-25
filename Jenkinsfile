@@ -5,31 +5,29 @@ pipeline {
         }
     }
     options { quietPeriod(600) }
-    parameters { 
+    parameters {
         string(name: 'IMAGE_NAME', defaultValue: 'metersphere', description: '构建后的 Docker 镜像名称')
-        string(name: 'IMAGE_PREFIX', defaultValue: 'registry.cn-qingdao.aliyuncs.com/metersphere', description: '构建后的 Docker 镜像带仓库名的前缀')
+        string(name: 'IMAGE_PREFIX', defaultValue: '10.10.4.190:5000/metersphere', description: '构建后的 Docker 镜像带仓库名的前缀')
+        string(name: 'TAG_VERSION', defaultValue: 'latest', description: '镜像版本号')
     }
     stages {
         stage('Build/Test') {
             steps {
-                configFileProvider([configFile(fileId: 'metersphere-maven', targetLocation: 'settings.xml')]) {
-                    sh "mvn clean package --settings ./settings.xml"
-                }
+                sh "env"
+                sh "/opt/webapps/tools/hudson.tasks.Maven_MavenInstallation/maven/bin/mvn clean package -Dmaven.test.skip=true"
             }
         }
         stage('Docker build & push') {
             steps {
-                sh "docker build --build-arg MS_VERSION=\${TAG_NAME:-\$BRANCH_NAME}-\${GIT_COMMIT:0:8} -t ${IMAGE_NAME}:\${TAG_NAME:-\$BRANCH_NAME} ."
-                sh "docker tag ${IMAGE_NAME}:\${TAG_NAME:-\$BRANCH_NAME} ${IMAGE_PREFIX}/${IMAGE_NAME}:\${TAG_NAME:-\$BRANCH_NAME}"
-                sh "docker push ${IMAGE_PREFIX}/${IMAGE_NAME}:\${TAG_NAME:-\$BRANCH_NAME}"
+                sh "docker build --build-arg MS_VERSION=\${TAG_NAME:-\$BRANCH_NAME}-\${GIT_COMMIT:0:8} -t ${IMAGE_NAME}:${TAG_VERSION} ."
+                sh "docker tag ${IMAGE_NAME}:${TAG_VERSION} ${IMAGE_PREFIX}/${IMAGE_NAME}:${TAG_VERSION}"
+                sh "docker push ${IMAGE_PREFIX}/${IMAGE_NAME}:${TAG_VERSION}"
             }
         }
-    }
-    post('Notification') {
-        always {
-            sh "echo \$WEBHOOK\n"
-            withCredentials([string(credentialsId: 'wechat-bot-webhook', variable: 'WEBHOOK')]) {
-                qyWechatNotification failSend: true, mentionedId: '', mentionedMobile: '', webhookUrl: "$WEBHOOK"
+        stage('Docker run') {
+            steps {
+                sh "docker rm -f metersphere |true"
+                sh "docker run -d --name metersphere -v /opt/metersphere:/opt/metersphere -p 8081:8081 ${IMAGE_NAME}:${TAG_VERSION}"
             }
         }
     }
