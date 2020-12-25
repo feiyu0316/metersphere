@@ -246,7 +246,8 @@ export default {
         for (let i = 0; i < this.tableData.length; i++) {
           if (this.tableData[i].id == param.id) {
             this.tableData[i].status = param.status;
-            break;
+            //break;
+            this.initTableData();
           }
         }
       });
